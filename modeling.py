@@ -32,17 +32,17 @@ class BertConfig(object):
   """Configuration for `BertModel`."""
 
   def __init__(self,
-               vocab_size,
-               hidden_size=768,
-               num_hidden_layers=12,
-               num_attention_heads=12,
-               intermediate_size=3072,
-               hidden_act="gelu",
-               hidden_dropout_prob=0.1,
-               attention_probs_dropout_prob=0.1,
-               max_position_embeddings=512,
-               type_vocab_size=16,
-               initializer_range=0.02):
+               vocab_size, #词表大小
+               hidden_size=768, #隐藏层神经元数
+               num_hidden_layers=12,#Transformer encoder中的隐藏层数
+               num_attention_heads=12,#多头注意力中head数
+               intermediate_size=3072,#encoder的“中间”隐层神经元数（例如feed-forwardlayer）
+               hidden_act="gelu", #隐藏层激活函数
+               hidden_dropout_prob=0.1, #隐层dropout率
+               attention_probs_dropout_prob=0.1, #注意力部分的dropout率
+               max_position_embeddings=512, #最大位置编码
+               type_vocab_size=16, #token_type_ids的词典大小，其实就是在nextsentence prediction 任务里的 Segment A 和 Segment B 。  
+               initializer_range=0.02):  #从截断的正态分布中输出随机值，如果生成的值大于平均值2个标准偏差的值则丢弃重新选择
     """Constructs BertConfig.
 
     Args:

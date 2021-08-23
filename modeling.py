@@ -377,7 +377,7 @@ def create_initializer(initializer_range=0.02):
   return tf.truncated_normal_initializer(stddev=initializer_range)
 
 
-def embedding_lookup(input_ids,
+def embedding_lookup(input_ids, # [batch_size, seq_length] 
                      vocab_size,
                      embedding_size=128,
                      initializer_range=0.02,
@@ -416,12 +416,12 @@ def embedding_lookup(input_ids,
     one_hot_input_ids = tf.one_hot(flat_input_ids, depth=vocab_size)
     output = tf.matmul(one_hot_input_ids, embedding_table)
   else:
-    output = tf.gather(embedding_table, flat_input_ids)
+    output = tf.gather(embedding_table, flat_input_ids)  #tf.gather(params,indices,axis=0 )从params的axis维根据indices的参数值获取切片
 
   input_shape = get_shape_list(input_ids)
 
   output = tf.reshape(output,
-                      input_shape[0:-1] + [input_shape[-1] * embedding_size])
+                      input_shape[0:-1] + [input_shape[-1] * embedding_size])   #[batch_size, seq_length, num_inputs*embedding_size]
   return (output, embedding_table)
 
 

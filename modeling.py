@@ -424,16 +424,16 @@ def embedding_lookup(input_ids, # [batch_size, seq_length]
                       input_shape[0:-1] + [input_shape[-1] * embedding_size])   #[batch_size, seq_length, num_inputs*embedding_size]
   return (output, embedding_table)
 
-
-def embedding_postprocessor(input_tensor,
-                            use_token_type=False,
-                            token_type_ids=None,
-                            token_type_vocab_size=16,
+#embedding后处理 token embedding，segment embedding以及position embedding
+def embedding_postprocessor(input_tensor,   # [batch_size, seq_length, embedding_size]
+                            use_token_type=False,  #是否使用token type 用来segment embedding  
+                            token_type_ids=None,   #[batch_size, seq_length]
+                            token_type_vocab_size=16,   #token type 总数
                             token_type_embedding_name="token_type_embeddings",
-                            use_position_embeddings=True,
+                            use_position_embeddings=True, 
                             position_embedding_name="position_embeddings",
                             initializer_range=0.02,
-                            max_position_embeddings=512,
+                            max_position_embeddings=512, #最大位置编码，必须大于等于max_seq_len
                             dropout_prob=0.1):
   """Performs various post-processing on a word embedding tensor.
 
@@ -468,7 +468,7 @@ def embedding_postprocessor(input_tensor,
   width = input_shape[2]
 
   output = input_tensor
-
+  # Segment embedding信息
   if use_token_type:
     if token_type_ids is None:
       raise ValueError("`token_type_ids` must be specified if"
@@ -478,15 +478,18 @@ def embedding_postprocessor(input_tensor,
         shape=[token_type_vocab_size, width],
         initializer=create_initializer(initializer_range))
     # This vocab will be small so we always do one-hot here, since it is always
-    # faster for a small vocabulary.
+    # faster for a small vocabulary. # 由于token-type-table比较小，所以这里采用one-hot的embedding方式加速
     flat_token_type_ids = tf.reshape(token_type_ids, [-1])
     one_hot_ids = tf.one_hot(flat_token_type_ids, depth=token_type_vocab_size)
     token_type_embeddings = tf.matmul(one_hot_ids, token_type_table)
     token_type_embeddings = tf.reshape(token_type_embeddings,
                                        [batch_size, seq_length, width])
-    output += token_type_embeddings
-
+    output += token_type_embeddings  #token embedding + segmentem bedding
+  #Position embedding信息
   if use_position_embeddings:
+    #TF可以协调多个数据流，在存在依赖的节点下非常有用，例如节点B要读取模型参数值V更新后的值，而节点A负责更新参数V，所以节点B就要等节点A执行完成后再执行，
+    #不然读到的就是更新以前的数据,这时候就需要个运算控制器tf.control_dependencies。
+    #返回所有在环境中的控制依赖的上下文管理器，只有在 control_inputs被执行以后，上下文管理器中的操作才会被执行。    
     assert_op = tf.assert_less_equal(seq_length, max_position_embeddings)
     with tf.control_dependencies([assert_op]):
       full_position_embeddings = tf.get_variable(
@@ -502,6 +505,10 @@ def embedding_postprocessor(input_tensor,
       # for position [0, 1, 2, ..., max_position_embeddings-1], and the current
       # sequence has positions [0, 1, 2, ... seq_length-1], so we can just
       # perform a slice.
+      # 这里position embedding是可学习的参数，[max_position_embeddings, width]
+      # 但是通常实际输入序列没有达到max_position_embeddings
+      # 所以为了提高训练速度，使用tf.slice取出句子长度的embedding
+      # tf.slice(inputs, begin, size, name) 此操作从由begin指定位置开始的张量input中提取一个尺寸size的切片
       position_embeddings = tf.slice(full_position_embeddings, [0, 0],
                                      [seq_length, -1])
       num_dims = len(output.shape.as_list())
@@ -509,15 +516,21 @@ def embedding_postprocessor(input_tensor,
       # Only the last two dimensions are relevant (`seq_length` and `width`), so
       # we broadcast among the first dimensions, which is typically just
       # the batch size.
+      
+      # word embedding之后的tensor是[batch_size, seq_length, width]
+      # 因为位置编码是与输入内容无关，它的shape总是[seq_length, width]
+      # 我们无法把位置Embedding加到word embedding上
+      # 因此我们需要扩展位置编码为[1, seq_length, width]
+      # 然后就能通过broadcasting加上去了。
       position_broadcast_shape = []
       for _ in range(num_dims - 2):
         position_broadcast_shape.append(1)
       position_broadcast_shape.extend([seq_length, width])
       position_embeddings = tf.reshape(position_embeddings,
                                        position_broadcast_shape)
-      output += position_embeddings
+      output += position_embeddings 
 
-  output = layer_norm_and_dropout(output, dropout_prob)
+  output = layer_norm_and_dropout(output, dropout_prob) #正则化dropout
   return output
 
 
